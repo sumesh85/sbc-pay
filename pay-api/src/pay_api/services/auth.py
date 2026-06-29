@@ -23,7 +23,7 @@ from pay_api.services.code import Code as CodeService
 from pay_api.services.flags import flags
 from pay_api.services.oauth_service import OAuthService as RestService
 from pay_api.utils.enums import AccountType, AuthHeaderType, Code, ContentType, PaymentMethod, Role
-from pay_api.utils.user_context import UserContext, user_context
+from pay_api.utils.user_context import UserContext, get_linking_key, user_context
 
 PREMIUM_ACCOUNT_TYPES = (
     AccountType.PREMIUM.value,
@@ -89,12 +89,19 @@ def check_auth(
                 current_app.config.get("AUTH_API_ENDPOINT")
                 + f"entities/{business_identifier}/authorizations?expanded=true"
             )
+            additional_headers = None
+            if linking_key := get_linking_key():
+                additional_headers = {"Account-Linking-Key": linking_key}
             auth_response = (
-                RestService.get(auth_url, bearer_token, AuthHeaderType.BEARER, ContentType.JSON).json() or {}
+                RestService.get(
+                    auth_url, bearer_token, AuthHeaderType.BEARER, ContentType.JSON,
+                    additional_headers=additional_headers,
+                ).json() or {}
             )
 
             roles: list = auth_response.get("roles", [])
-            g.account_id = auth_response.get("account").get("id") if auth_response.get("account", None) else None
+            account = auth_response.get("account") or {}
+            g.account_id = account.get("paymentAccountId") or account.get("id")
         elif user.is_staff():
             roles: list = user.roles
             auth_response = {}

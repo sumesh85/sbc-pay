@@ -181,6 +181,11 @@ def get_auth_account_id() -> str:
     return account_id
 
 
+def get_linking_key() -> str | None:
+    """Return the Account-Linking-Key header value."""
+    return request.headers.get("Account-Linking-Key") if request else None
+
+
 def get_original_user_sub(is_system: bool) -> str:
     """Return original sub from the header. Note this only applies to service accounts (SYSTEM role)."""
     if not is_system or not request:

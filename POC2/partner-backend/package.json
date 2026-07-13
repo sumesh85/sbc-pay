@@ -1,0 +1,9 @@
+{
+  "name": "poc2-partner-backend",
+  "version": "1.0.0",
+  "dependencies": {
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "axios": "^1.7.4"
+  }
+}

@@ -1,0 +1,38 @@
+services:
+  partner-web:
+    image: node:20-alpine
+    container_name: poc2-partner-web
+    working_dir: /app
+    volumes:
+      - ./partner-web:/app
+    command: sh -c "npm install --silent && node server.js"
+    ports:
+      - "3000:3000"
+
+  partner-backend:
+    image: node:20-alpine
+    container_name: poc2-partner-backend
+    working_dir: /app
+    volumes:
+      - ./partner-backend:/app
+    command: sh -c "npm install --silent && node server.js"
+    environment:
+      # -------- Partner side (TEST loginproxy, acting as the customer's realm) --------
+      PARTNER_KC_URL: https://test.loginproxy.gov.bc.ca/auth
+      PARTNER_REALM: bcregistry
+      PARTNER_CLIENT_ID: bcros-dev-integration
+      PARTNER_CLIENT_SECRET: ta6t4ymbx3hX4ghBS9XXQot0XNZ8IyP7
+
+      # -------- BCROS side (DEV loginproxy, actual BCROS realm) --------
+      BCROS_KC_URL: https://dev.loginproxy.gov.bc.ca/auth
+      BCROS_REALM: bcregistry
+      BCROS_CLIENT_ID: partner-client
+      BCROS_CLIENT_SECRET: 7eMdVswg5kexZQOfSAHOvcdEor689h6x
+      # Alias configured on DEV bcregistry pointing at TEST bcregistry
+      BCROS_SUBJECT_ISSUER: partner-realm
+
+      # -------- Real DEV APIs --------
+      BCROS_PAY_API: https://test.api.connect.gov.bc.ca/pay-dev/api/v1
+      BCROS_AUTH_API: https://test.api.connect.gov.bc.ca/auth-dev/api/v1
+    ports:
+      - "3001:3001"

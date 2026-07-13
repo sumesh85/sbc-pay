@@ -1,0 +1,74 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: poc-keycloak
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_STRICT: false
+      KC_HTTP_ENABLED: true
+      KC_FEATURES: token-exchange,admin-fine-grained-authz
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/realms:/opt/keycloak/data/import
+
+  partner-web:
+    image: node:20-alpine
+    container_name: poc-partner-web
+    working_dir: /app
+    volumes:
+      - ./partner-web:/app
+    command: sh -c "npm install --silent && node server.js"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - keycloak
+
+  partner-backend:
+    image: node:20-alpine
+    container_name: poc-partner-backend
+    working_dir: /app
+    volumes:
+      - ./partner-backend:/app
+    command: sh -c "npm install --silent && node server.js"
+    environment:
+      KC_INTERNAL: http://keycloak:8080
+      KC_PUBLIC: http://localhost:8080
+      PARTNER_REALM: partner
+      BCROS_REALM: bcros
+      PARTNER_CLIENT_ID: partner-webapp
+      BCROS_CLIENT_ID: partner-service
+      BCROS_CLIENT_SECRET: partner-service-secret
+      BCROS_BACKEND_URL: http://bcros-backend:3003
+    ports:
+      - "3001:3001"
+    depends_on:
+      - keycloak
+
+  bcros-web:
+    image: node:20-alpine
+    container_name: poc-bcros-web
+    working_dir: /app
+    volumes:
+      - ./bcros-web:/app
+    command: sh -c "npm install --silent && node server.js"
+    ports:
+      - "3002:3002"
+
+  bcros-backend:
+    image: node:20-alpine
+    container_name: poc-bcros-backend
+    working_dir: /app
+    volumes:
+      - ./bcros-backend:/app
+    command: sh -c "npm install --silent && node server.js"
+    environment:
+      KC_INTERNAL: http://keycloak:8080
+      BCROS_REALM: bcros
+    ports:
+      - "3003:3003"
+    depends_on:
+      - keycloak

@@ -62,7 +62,7 @@ sequenceDiagram
   participant API as Pay-API
   participant KC as Keycloak
   participant PayBC
-  participant PS as PubSub
+  participant PS as PubSub/Webhook
 
   Payer->>Web: Open signed link
   Web->>API: Verify token, GET invoice
@@ -80,7 +80,7 @@ sequenceDiagram
   API->>PS: emit invoice.settled
 ```
 
-## 3. Sequence — Online Banking
+<!-- ## 3. Sequence — Online Banking
 
 ```mermaid
 sequenceDiagram
@@ -108,9 +108,10 @@ sequenceDiagram
   CAS-->>Queue: Reconciliation file
   Queue->>API: Match by ref, mark SETTLED
   API->>PS: emit invoice.settled
-```
+``` 
+-->
 
-## 4. Sequence — PAD
+## 3. Sequence — PAD
 
 ```mermaid
 sequenceDiagram
@@ -121,11 +122,10 @@ sequenceDiagram
   participant KC as Keycloak
   participant CAS
   participant Queue as Pay-Queue
-  participant PS as PubSub
+  participant PS as PubSub/Webhook
 
   Payer->>Web: Open signed link
   Web->>API: Verify token, GET invoice
-  Payer->>Web: Choose PAD
   Web->>KC: Login required
   KC-->>Web: JWT
   Web->>API: Link invoice to account
@@ -134,8 +134,6 @@ sequenceDiagram
     Web->>API: Store mandate (encrypted)
   end
   API->>API: Mark AUTHORIZED (hold 3 biz days)
-  API->>PS: emit invoice.authorized
-  Note over API,CAS: On release date, include in PAD debit file
   API->>CAS: PAD debit
   CAS-->>Queue: Settlement or NSF return
   alt Settled
@@ -147,31 +145,3 @@ sequenceDiagram
   end
 ```
 
-## 5. Invoice state
-
-```mermaid
-stateDiagram-v2
-  [*] --> CREATED_UNLINKED: External system POST
-  CREATED_UNLINKED --> LINKED: Login (required for OB/PAD, optional for CC)
-  CREATED_UNLINKED --> SETTLED: CC guest checkout
-  LINKED --> SETTLED: CC after retro-link
-  LINKED --> AWAITING_BANK: OB details displayed
-  AWAITING_BANK --> SETTLED: CAS recon match
-  LINKED --> AUTHORIZED: PAD mandate captured
-  AUTHORIZED --> SETTLED: Hold elapsed + CAS confirms
-  AUTHORIZED --> NSF: CAS return
-  NSF --> AUTHORIZED: Retry
-  SETTLED --> [*]
-```
-
-## Open decisions
-
-- **CC retro-link timing** — currently shown *before* PayBC redirect so the
-  receipt lands on the right account. Alternative: link on PayBC callback.
-- **OB event name** — `invoice.awaiting_bank` is a placeholder; align with
-  existing CloudEvents taxonomy in `pay-api` publishers.
-- **PAD hold window for externally-initiated invoices** — 3 business days
-  proposed as default (first-time payer, no NSF history), even though
-  internally-initiated PAD releases same-day today.
-- **Signed link TTL and single-use enforcement** — TBD; low-severity leak
-  risk but worth capping.

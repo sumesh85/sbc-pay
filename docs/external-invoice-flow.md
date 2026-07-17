@@ -80,36 +80,7 @@ sequenceDiagram
   API->>PS: emit invoice.settled
 ```
 
-<!-- ## 3. Sequence — Online Banking
 
-```mermaid
-sequenceDiagram
-  autonumber
-  actor Payer
-  participant Web as BCROS Web
-  participant API as Pay-API
-  participant KC as Keycloak
-  participant Bank as Payer's Bank
-  participant CAS
-  participant Queue as Pay-Queue
-  participant PS as PubSub
-
-  Payer->>Web: Open signed link
-  Web->>API: Verify token, GET invoice
-  Payer->>Web: Choose OB
-  Web->>KC: Login required
-  KC-->>Web: JWT
-  Web->>API: Link invoice to account
-  API-->>Web: OB payment reference + payee
-  Web-->>Payer: Show OB instructions
-  API->>PS: emit invoice.awaiting_bank
-  Note over Payer,Bank: Payer initiates OB transfer<br/>(hours to days)
-  Bank->>CAS: Deposit reported
-  CAS-->>Queue: Reconciliation file
-  Queue->>API: Match by ref, mark SETTLED
-  API->>PS: emit invoice.settled
-``` 
--->
 
 ## 3. Sequence — PAD
 

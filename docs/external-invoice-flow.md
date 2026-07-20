@@ -21,12 +21,12 @@ flowchart LR
     ext["External System<br/>(integrator)"]
     payer(("Payer"))
     inbox["Payer's inbox"]
-    notif["Notification Service"]
   end
 
   subgraph gov["BC Gov network"]
     web["BCROS Web<br/>(hosted checkout)"]
     api["Pay-API<br/>(Flask)"]
+    notif["Notification Service"]
     kc["Keycloak"]
     paybc["PayBC<br/>(hosted CC page)"]
     ps[("PubSub<br/>payment events")]

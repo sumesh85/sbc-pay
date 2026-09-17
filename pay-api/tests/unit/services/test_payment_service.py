@@ -336,6 +336,7 @@ def test_patch_online_banking_payment_to_cc(session, public_user_mock):
     """Assert that the payment records are created."""
     payment_account = factory_payment_account(payment_method_code=PaymentMethod.ONLINE_BANKING.value).save()
     payment_account.save()
+    ob_cfs_id = CfsAccount.find_by_account_id(payment_account.id)[0].id
     # payment.save()
     payment_response = PaymentService.create_invoice(
         get_payment_request_with_service_fees(business_identifier="CP0002000"),
@@ -349,6 +350,64 @@ def test_patch_online_banking_payment_to_cc(session, public_user_mock):
 
     invoice_response = PaymentService.update_invoice(invoice_id, request)
     assert invoice_response.get("payment_method") == PaymentMethod.CC.value
+    # OB→CC with an existing CFS reference keeps the OB CFS account so PayBC can settle it.
+    assert invoice_response.get("cfs_account_id") == ob_cfs_id
+
+
+def _fresh_switchable_invoice(
+    payment_method: str = PaymentMethod.DIRECT_PAY.value,
+    status: str = InvoiceStatus.CREATED.value,
+):
+    account = factory_payment_account()
+    account.save()
+    invoice = factory_invoice(payment_account=account, payment_method_code=payment_method, status_code=status)
+    invoice.save()
+    return invoice
+
+
+def test_convert_noop_when_target_matches_current(session, public_user_mock):
+    """Same-method request returns without raising."""
+    invoice = _fresh_switchable_invoice(payment_method=PaymentMethod.DIRECT_PAY.value)
+    PaymentService._convert_invoice_payment_method(
+        invoice, {"paymentInfo": {"methodOfPayment": PaymentMethod.DIRECT_PAY.value}}
+    )
+
+
+def test_convert_rejects_when_status_not_created(session, public_user_mock):
+    """APPROVED (released PAD) can no longer be switched."""
+    invoice = _fresh_switchable_invoice(
+        payment_method=PaymentMethod.PAD.value,
+        status=InvoiceStatus.APPROVED.value,
+    )
+    with pytest.raises(BusinessException):
+        PaymentService._convert_invoice_payment_method(
+            invoice, {"paymentInfo": {"methodOfPayment": PaymentMethod.CC.value}}
+        )
+
+
+def test_convert_rejects_target_outside_allowlist(session, public_user_mock):
+    """Target method outside {CC, DIRECT_PAY, ONLINE_BANKING, PAD} is rejected."""
+    invoice = _fresh_switchable_invoice(payment_method=PaymentMethod.DIRECT_PAY.value)
+    with pytest.raises(BusinessException):
+        PaymentService._convert_invoice_payment_method(
+            invoice, {"paymentInfo": {"methodOfPayment": PaymentMethod.EFT.value}}
+        )
+
+
+def test_convert_rejects_source_outside_allowlist(session, public_user_mock):
+    """Source method outside the allowlist is rejected regardless of target."""
+    invoice = _fresh_switchable_invoice(payment_method=PaymentMethod.EFT.value)
+    with pytest.raises(BusinessException):
+        PaymentService._convert_invoice_payment_method(
+            invoice, {"paymentInfo": {"methodOfPayment": PaymentMethod.CC.value}}
+        )
+
+
+def test_convert_rejects_missing_payment_method_in_payload(session, public_user_mock):
+    """Empty paymentInfo → INVALID_REQUEST before any status/method check."""
+    invoice = _fresh_switchable_invoice()
+    with pytest.raises(BusinessException):
+        PaymentService._convert_invoice_payment_method(invoice, {"paymentInfo": {}})
 
 
 def _fresh_switchable_invoice(
@@ -581,10 +640,12 @@ def test_patch_invoice_excludes_linking_key(session, public_user_mock, monkeypat
         auth_account_id="VENDOR_777", payment_method_code=PaymentMethod.ONLINE_BANKING.value
     )
     payment_account.save()
+    ob_cfs = CfsAccount.find_by_account_id(payment_account.id)[0]
     invoice = factory_invoice(
         payment_account=payment_account,
         business_identifier="CP0001234",
         payment_method_code=PaymentMethod.ONLINE_BANKING.value,
+        cfs_account_id=ob_cfs.id,
     )
     invoice.save()
     factory_invoice_reference(invoice.id).save()
@@ -597,6 +658,8 @@ def test_patch_invoice_excludes_linking_key(session, public_user_mock, monkeypat
         )
 
     assert response.get("payment_method") == PaymentMethod.CC.value
+    # OB→CC with an existing CFS reference keeps the OB CFS account so PayBC can settle it.
+    assert response.get("cfs_account_id") == ob_cfs.id
 
     mock_check_auth.assert_called_once()
     called_args, called_kwargs = mock_check_auth.call_args
